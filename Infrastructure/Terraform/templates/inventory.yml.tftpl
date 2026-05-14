@@ -1,0 +1,29 @@
+all:
+  vars:
+    ansible_user: ${oslogin_username}
+    ansible_ssh_private_key_file: "~/.ssh/google_compute_engine"
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+
+  children:
+    edge:
+      hosts:
+        proxy_bastion:
+          ansible_host: ${bastion_public_ip}
+
+    management:
+      vars:
+        ansible_ssh_common_args: "-o ProxyJump=${oslogin_username}@${bastion_public_ip} -o StrictHostKeyChecking=no"
+      hosts:
+        jenkins:
+          ansible_host: ${jenkins_private_ip}
+        harbor:
+          ansible_host: ${harbor_private_ip}
+
+    workload:
+      vars:
+        ansible_ssh_common_args: "-o ProxyJump=${oslogin_username}@${bastion_public_ip} -o StrictHostKeyChecking=no"
+      hosts:
+        k3s_master:
+          ansible_host: ${k3s_master_private_ip}
+        k3s_worker:
+          ansible_host: ${k3s_worker_private_ip}

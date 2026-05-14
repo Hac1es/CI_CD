@@ -1,0 +1,6 @@
+mkdir roles group_vars
+ansible-galaxy init roles/bastion_nginx
+ansible-galaxy init roles/k3s_master
+ansible-galaxy init roles/k3s_worker
+ansible-galaxy init roles/jenkins
+ansible-galaxy init roles/harbor

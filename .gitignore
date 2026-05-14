@@ -1,0 +1,19 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+# Uncomment if tfvars contain secrets
+*.tfvars
+
+# Ansible
+*.retry
+.ansible/
+# Uncomment if you want to ignore ansible logs
+# *.log
