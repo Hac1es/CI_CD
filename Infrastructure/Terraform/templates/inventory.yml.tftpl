@@ -1,8 +1,9 @@
 all:
   vars:
     ansible_user: ${oslogin_username}
-    ansible_ssh_private_key_file: "~/.ssh/google_compute_engine"
-    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+    ansible_ssh_private_key_file: "/home/tung/.ssh/google_compute_engine"
+    ansible_ssh_common_args: "-o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+    ansible_python_interpreter: /usr/bin/python3.10
 
   children:
     edge:
@@ -12,7 +13,10 @@ all:
 
     management:
       vars:
-        ansible_ssh_common_args: "-o ProxyJump=${oslogin_username}@${bastion_public_ip} -o StrictHostKeyChecking=no"
+        ansible_ssh_common_args: >-
+          -o ProxyCommand="ssh -i /home/tung/.ssh/google_compute_engine
+          -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -W %h:%p
+          ${oslogin_username}@${bastion_public_ip}"
       hosts:
         jenkins:
           ansible_host: ${jenkins_private_ip}
@@ -21,7 +25,10 @@ all:
 
     workload:
       vars:
-        ansible_ssh_common_args: "-o ProxyJump=${oslogin_username}@${bastion_public_ip} -o StrictHostKeyChecking=no"
+        ansible_ssh_common_args: >-
+          -o ProxyCommand="ssh -i /home/tung/.ssh/google_compute_engine
+          -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -W %h:%p
+          ${oslogin_username}@${bastion_public_ip}"
       hosts:
         k3s_master:
           ansible_host: ${k3s_master_private_ip}

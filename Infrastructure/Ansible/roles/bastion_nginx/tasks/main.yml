@@ -1,3 +1,52 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # tasks file for roles/bastion_nginx
+- name: Install Nginx on Bastion
+  apt:
+    name: nginx
+    state: present
+    update_cache: yes
+
+- name: Create Nginx reverse proxy config for DevSecOps tools
+  copy:
+    dest: /etc/nginx/sites-available/devsecops-proxy.conf
+    content: |
+      # Điều hướng đến Jenkins (Ví dụ IP nội bộ Jenkins là 10.0.2.10)
+      server {
+          listen 80;
+          server_name jenkins.local;
+          location / {
+              proxy_pass http://10.0.2.10:8080;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+          }
+      }
+
+      # Điều hướng đến Harbor (Ví dụ IP nội bộ Harbor là 10.0.2.20)
+      server {
+          listen 80;
+          server_name harbor.local;
+          client_max_body_size 500M; # Để đẩy được Docker Image nặng
+          location / {
+              proxy_pass http://10.0.2.20:80;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+          }
+      }
+
+- name: Enable config by creating symlink
+  file:
+    src: /etc/nginx/sites-available/devsecops-proxy.conf
+    dest: /etc/nginx/sites-enabled/devsecops-proxy.conf
+    state: link
+
+- name: Remove default Nginx config
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+
+- name: Restart Nginx to apply changes
+  systemd:
+    name: nginx
+    state: restarted
+    enabled: yes

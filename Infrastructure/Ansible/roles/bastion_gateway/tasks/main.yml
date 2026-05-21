@@ -1,0 +1,59 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for roles/bastion_gateway
+- name: Enable IPv4 forwarding
+  ansible.builtin.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_set: true
+    state: present
+    reload: true
+
+- name: Preseed iptables-persistent autosave
+  ansible.builtin.debconf:
+    name: iptables-persistent
+    question: "{{ item }}"
+    value: "true"
+    vtype: boolean
+  loop:
+    - iptables-persistent/autosave_v4
+    - iptables-persistent/autosave_v6
+
+- name: Install iptables-persistent
+  ansible.builtin.apt:
+    name: iptables-persistent
+    state: present
+    update_cache: yes
+
+- name: Allow forwarding from private subnets
+  ansible.builtin.iptables:
+    chain: FORWARD
+    in_interface: "{{ bastion_public_interface }}"
+    out_interface: "{{ bastion_public_interface }}"
+    source: "{{ item }}"
+    jump: ACCEPT
+    state: present
+  loop: "{{ bastion_private_cidrs }}"
+
+- name: Allow established and related forwarding
+  ansible.builtin.iptables:
+    chain: FORWARD
+    in_interface: "{{ bastion_public_interface }}"
+    out_interface: "{{ bastion_public_interface }}"
+    ctstate: ESTABLISHED,RELATED
+    jump: ACCEPT
+    state: present
+
+- name: Masquerade private subnets
+  ansible.builtin.iptables:
+    table: nat
+    chain: POSTROUTING
+    out_interface: "{{ bastion_public_interface }}"
+    source: "{{ item }}"
+    jump: MASQUERADE
+    state: present
+  loop: "{{ bastion_private_cidrs }}"
+
+- name: Persist iptables rules
+  ansible.builtin.command: /usr/sbin/netfilter-persistent save
+  changed_when: false

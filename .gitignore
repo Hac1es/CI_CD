@@ -9,11 +9,11 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
-# Uncomment if tfvars contain secrets
-*.tfvars
+Infrastructure/Terraform/terraform.tfvars
 
 # Ansible
 *.retry
 .ansible/
+Infrastructure/Ansible/inventory.yml
 # Uncomment if you want to ignore ansible logs
 # *.log

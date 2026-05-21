@@ -5,10 +5,12 @@ data "google_compute_image" "ubuntu" {
 
 # --- 1. Bastion VM Ở PUBLIC SUBNET (Có IP Public) ---
 resource "google_compute_instance" "public_edge" {
-  name         = "public-edge-proxy"
+  name         = "edge-server"
   machine_type = "e2-small"
   zone         = var.zone
   tags         = ["public-edge"] # Nhận luật Firewall từ Internet
+  can_ip_forward = true
+  desired_status = var.vm_state
 
   metadata = {
     enable-oslogin = "TRUE"
@@ -31,6 +33,8 @@ resource "google_compute_instance" "jenkins" {
   name         = "jenkins-server"
   machine_type = "e2-medium"
   zone         = var.zone
+  tags         = ["private-egress"]
+  desired_status = var.vm_state
 
   metadata = {
     enable-oslogin = "TRUE"
@@ -52,6 +56,8 @@ resource "google_compute_instance" "harbor" {
   name         = "harbor-registry"
   machine_type = "e2-medium"
   zone         = var.zone
+  tags         = ["private-egress"]
+  desired_status = var.vm_state
 
   metadata = {
     enable-oslogin = "TRUE"
@@ -73,6 +79,8 @@ resource "google_compute_instance" "k3s_master" {
   name         = "k3s-master"
   machine_type = "e2-medium"
   zone         = var.zone
+  tags         = ["private-egress"]
+  desired_status = var.vm_state
 
   metadata = {
     enable-oslogin = "TRUE"
@@ -93,6 +101,8 @@ resource "google_compute_instance" "k3s_worker" {
   name         = "k3s-worker"
   machine_type = "e2-medium"
   zone         = var.zone
+  tags         = ["private-egress"]
+  desired_status = var.vm_state
 
   metadata = {
     enable-oslogin = "TRUE"

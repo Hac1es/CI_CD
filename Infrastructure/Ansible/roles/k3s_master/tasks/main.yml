@@ -1,3 +1,29 @@
 #SPDX-License-Identifier: MIT-0
----
 # tasks file for roles/k3s_master
+- name: Install curl
+  ansible.builtin.apt:
+    name: curl
+    state: present
+    update_cache: yes
+
+- name: Install K3s server
+  ansible.builtin.shell: |
+    curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" sh -
+  args:
+    creates: /etc/systemd/system/k3s.service
+
+- name: Wait for K3s token to be available
+  ansible.builtin.wait_for:
+    path: /var/lib/rancher/k3s/server/node-token
+    state: present
+    timeout: 120
+
+- name: Get K3s join token from master
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_token_b64
+
+- name: Share token to dummy host memory
+  ansible.builtin.add_host:
+    name: "K3S_TOKEN_HOLDER"
+    token: "{{ k3s_token_b64['content'] | b64decode | trim }}"

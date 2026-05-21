@@ -1,0 +1,6 @@
+---
+# defaults file for roles/bastion_gateway
+bastion_public_interface: ens4
+bastion_private_cidrs:
+  - 10.0.2.0/24
+  - 10.0.3.0/24
