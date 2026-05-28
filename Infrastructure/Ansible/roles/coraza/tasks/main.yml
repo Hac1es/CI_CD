@@ -1,0 +1,33 @@
+---
+# tasks file for coraza
+- name: Ensure Coraza prerequisites are installed
+  ansible.builtin.apt:
+    name:
+      - curl
+      - unzip
+    state: present
+    update_cache: yes
+
+- name: Ensure Coraza install directory exists
+  ansible.builtin.file:
+    path: /opt/coraza
+    state: directory
+    mode: "0755"
+
+- name: Download Coraza WASM release archive
+  ansible.builtin.get_url:
+    url: "{{ coraza_release_asset_url }}"
+    dest: /tmp/coraza-proxy-wasm.zip
+    mode: "0644"
+
+- name: Extract Coraza WASM binary
+  ansible.builtin.unarchive:
+    src: /tmp/coraza-proxy-wasm.zip
+    dest: /opt/coraza
+    remote_src: yes
+    creates: "{{ coraza_wasm_path }}"
+
+- name: Ensure Coraza WASM file permissions
+  ansible.builtin.file:
+    path: "{{ coraza_wasm_path }}"
+    mode: "0644"

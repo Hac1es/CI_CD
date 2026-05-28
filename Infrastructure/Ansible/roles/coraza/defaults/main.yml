@@ -1,0 +1,5 @@
+---
+# defaults file for coraza
+coraza_release_version: "0.6.0"
+coraza_release_asset_url: "https://github.com/corazawaf/coraza-proxy-wasm/releases/download/{{ coraza_release_version }}/coraza-proxy-wasm-{{ coraza_release_version }}.zip"
+coraza_wasm_path: /opt/coraza/coraza-proxy-wasm.wasm

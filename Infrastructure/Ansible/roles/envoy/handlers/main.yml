@@ -1,0 +1,7 @@
+---
+# handlers file for envoy
+- name: Restart envoy container
+  ansible.builtin.shell: |
+    if docker ps --format '{% raw %}{{.Names}}{% endraw %}' | grep -qx "{{ envoy_container_name }}"; then
+      docker restart {{ envoy_container_name }}
+    fi

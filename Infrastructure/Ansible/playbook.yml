@@ -1,11 +1,12 @@
 ---
-# Bước 1: Cấu hình Gateway/Bastion để làm reverse proxy và SSL termination sau này
-- name: Configure Public Edge Proxy (Bastion)
+# Bước 1: Cấu hình Gateway (Envoy) + WAF (Coraza) để làm reverse proxy và SSL termination sau này
+- name: Configure Public Edge Proxy
   hosts: edge
   become: yes
   roles:
     - bastion_gateway
-    - bastion_nginx
+    - coraza
+    - envoy
 
 # Bước 2: Setup GitLab Server làm CI Engine VÀ Secure Registry
 - name: Configure CI Engine (GitLab)
