@@ -1,0 +1,4 @@
+# defaults file for gitlab
+gitlab_package_name: gitlab-ce
+gitlab_repo_script_url: https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh
+gitlab_external_url: "http://{{ ansible_host }}"

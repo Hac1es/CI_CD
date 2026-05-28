@@ -1,0 +1,29 @@
+---
+# Bước 1: Cấu hình Gateway/Bastion để làm reverse proxy và SSL termination sau này
+- name: Configure Public Edge Proxy (Bastion)
+  hosts: edge
+  become: yes
+  roles:
+    - bastion_gateway
+    - bastion_nginx
+
+# Bước 2: Setup GitLab Server làm CI Engine VÀ Secure Registry
+- name: Configure CI Engine (GitLab)
+  hosts: gitlab
+  become: yes
+  roles:
+    - gitlab
+
+# Bước 3: Khởi tạo K3s Control Plane
+- name: Configure K3s Master Node
+  hosts: master
+  become: yes
+  roles:
+    - k3s_master
+
+# Bước 4: Join Worker vào cụm để mở rộng tài nguyên tính toán
+- name: Configure K3s Worker Node
+  hosts: worker
+  become: yes
+  roles:
+    - k3s_worker

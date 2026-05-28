@@ -35,7 +35,7 @@ resource "google_compute_route" "private_egress" {
   name                   = "private-egress"
   network                = google_compute_network.vpc.id
   dest_range             = "0.0.0.0/0"
-  next_hop_instance      = google_compute_instance.public_edge.self_link
+  next_hop_instance      = google_compute_instance.bastion.self_link
   next_hop_instance_zone = var.zone
   tags                   = ["private-egress"]
 }

@@ -1,0 +1,32 @@
+# tasks file for gitlab
+- name: Install GitLab prerequisites
+  apt:
+    name:
+      - curl
+      - ca-certificates
+      - openssh-server
+      - tzdata
+      - perl
+    state: present
+    update_cache: yes
+    lock_timeout: 300
+
+- name: Download GitLab package repository installer
+  get_url:
+    url: "{{ gitlab_repo_script_url }}"
+    dest: /tmp/gitlab_repo.sh
+    mode: "0755"
+
+- name: Register GitLab package repository
+  command: bash /tmp/gitlab_repo.sh
+  args:
+    creates: /etc/apt/sources.list.d/gitlab_gitlab-ce.list
+
+- name: Install GitLab CE
+  apt:
+    name: "{{ gitlab_package_name }}"
+    state: present
+    update_cache: yes
+    lock_timeout: 300
+  environment:
+    EXTERNAL_URL: "{{ gitlab_external_url }}"

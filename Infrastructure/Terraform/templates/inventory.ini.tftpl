@@ -1,0 +1,22 @@
+[edge]
+bastion ansible_host=${bastion_public_ip}
+
+[management]
+gitlab ansible_host=${gitlab_private_ip}
+
+[workload]
+master ansible_host=${k3s_master_private_ip}
+worker ansible_host=${k3s_worker_private_ip}
+
+[private:children]
+management
+workload
+
+[all:vars]
+ansible_user=${oslogin_username}
+ansible_ssh_private_key_file=/home/tung/.ssh/google_compute_engine
+ansible_ssh_common_args=-o IdentitiesOnly=yes -o StrictHostKeyChecking=no
+ansible_python_interpreter=/usr/bin/python3.10
+
+[private:vars]
+ansible_ssh_common_args=-o ProxyCommand="ssh -i /home/tung/.ssh/google_compute_engine -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -W %h:%p ${oslogin_username}@${bastion_public_ip}"

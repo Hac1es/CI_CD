@@ -4,7 +4,7 @@ data "google_compute_image" "ubuntu" {
 }
 
 # --- 1. Bastion VM Ở PUBLIC SUBNET (Có IP Public) ---
-resource "google_compute_instance" "public_edge" {
+resource "google_compute_instance" "bastion" {
   name         = "edge-server"
   machine_type = "e2-small"
   zone         = var.zone
@@ -29,9 +29,9 @@ resource "google_compute_instance" "public_edge" {
 }
 
 # --- 2. VMs Ở MANAGEMENT SUBNET ---
-resource "google_compute_instance" "jenkins" {
-  name         = "jenkins-server"
-  machine_type = "e2-medium"
+resource "google_compute_instance" "gitlab" {
+  name         = "gitlab-server"
+  machine_type = "e2-standard-2"
   zone         = var.zone
   tags         = ["private-egress"]
   desired_status = var.vm_state
@@ -43,34 +43,14 @@ resource "google_compute_instance" "jenkins" {
   boot_disk {
     initialize_params {
       image = data.google_compute_image.ubuntu.self_link
+      size  = 50
+      type  = "pd-balanced"
     }
   }
   
   network_interface {
     subnetwork = google_compute_subnetwork.management.id
     # Không có access_config => KHÔNG có IP Public
-  }
-}
-
-resource "google_compute_instance" "harbor" {
-  name         = "harbor-registry"
-  machine_type = "e2-medium"
-  zone         = var.zone
-  tags         = ["private-egress"]
-  desired_status = var.vm_state
-
-  metadata = {
-    enable-oslogin = "TRUE"
-  }
-
-  boot_disk {
-    initialize_params {
-      image = data.google_compute_image.ubuntu.self_link
-    }
-  }
-  
-  network_interface {
-    subnetwork = google_compute_subnetwork.management.id
   }
 }
 

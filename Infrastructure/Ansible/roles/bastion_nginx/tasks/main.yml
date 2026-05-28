@@ -6,47 +6,33 @@
     name: nginx
     state: present
     update_cache: yes
+  notify: Restart Nginx
 
 - name: Create Nginx reverse proxy config for DevSecOps tools
   copy:
     dest: /etc/nginx/sites-available/devsecops-proxy.conf
     content: |
-      # Điều hướng đến Jenkins (Ví dụ IP nội bộ Jenkins là 10.0.2.10)
+      # Điều hướng đến GitLab
       server {
           listen 80;
-          server_name jenkins.local;
+          server_name gitlab.local;
           location / {
-              proxy_pass http://10.0.2.10:8080;
+            proxy_pass "http://{{ hostvars['gitlab'].ansible_host }}:80";
               proxy_set_header Host $host;
               proxy_set_header X-Real-IP $remote_addr;
           }
       }
-
-      # Điều hướng đến Harbor (Ví dụ IP nội bộ Harbor là 10.0.2.20)
-      server {
-          listen 80;
-          server_name harbor.local;
-          client_max_body_size 500M; # Để đẩy được Docker Image nặng
-          location / {
-              proxy_pass http://10.0.2.20:80;
-              proxy_set_header Host $host;
-              proxy_set_header X-Real-IP $remote_addr;
-          }
-      }
+  notify: Restart Nginx
 
 - name: Enable config by creating symlink
   file:
     src: /etc/nginx/sites-available/devsecops-proxy.conf
     dest: /etc/nginx/sites-enabled/devsecops-proxy.conf
     state: link
+  notify: Restart Nginx
 
 - name: Remove default Nginx config
   file:
     path: /etc/nginx/sites-enabled/default
     state: absent
-
-- name: Restart Nginx to apply changes
-  systemd:
-    name: nginx
-    state: restarted
-    enabled: yes
+  notify: Restart Nginx

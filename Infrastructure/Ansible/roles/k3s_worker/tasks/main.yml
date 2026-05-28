@@ -8,6 +8,6 @@
 
 - name: Install K3s agent and join cluster
   ansible.builtin.shell: |
-    curl -sfL https://get.k3s.io | K3S_URL="https://{{ hostvars['k3s_master']['ansible_host'] }}:6443" K3S_TOKEN="{{ hostvars['K3S_TOKEN_HOLDER']['token'] }}" sh -
+    curl -sfL https://get.k3s.io | K3S_URL="https://{{ hostvars['master']['ansible_host'] }}:6443" K3S_TOKEN="{{ hostvars['K3S_TOKEN_HOLDER']['token'] }}" sh -
   args:
     creates: /etc/systemd/system/k3s-agent.service
