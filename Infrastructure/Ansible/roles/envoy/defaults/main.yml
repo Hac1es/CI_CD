@@ -2,7 +2,8 @@
 # defaults file for envoy
 envoy_image: envoyproxy/envoy:v1.31-latest
 envoy_container_name: envoy
-envoy_listen_port: 80
+envoy_host_http_port: 80
+envoy_listen_port: 8080
 envoy_admin_port: 9901
 envoy_upstream_host: "{{ hostvars['gitlab'].ansible_host }}"
 envoy_upstream_port: 80

@@ -28,3 +28,10 @@
   become: yes
   roles:
     - k3s_worker
+
+# Bước 5: Cài GitLab Runner trong K3s để chạy Kaniko CI jobs
+- name: Configure GitLab Runner on K3s
+  hosts: master
+  become: yes
+  roles:
+    - gitlab_runner

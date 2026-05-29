@@ -1,0 +1,12 @@
+---
+# Copy this structure into an encrypted Ansible Vault file:
+# ansible-vault create Ansible/group_vars/all/vault.yml
+
+gitlab_root_email: admin@example.local
+gitlab_root_password: "replace-with-lab-root-password"
+
+# Predetermined PAT value created inside GitLab by gitlab-rails runner.
+# Must be at least 20 characters. Use a long random value.
+# Scope is controlled by gitlab_bootstrap_pat_scopes in the gitlab role.
+gitlab_api_token: "replace-with-random-token-at-least-20-chars"
+

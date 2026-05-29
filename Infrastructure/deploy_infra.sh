@@ -10,11 +10,14 @@ ANSIBLE_DIR="Ansible"
 HASH_FILE=".terraform_hash"
 INVENTORY_FILE="$ANSIBLE_DIR/inventory.ini"
 export ANSIBLE_CONFIG="$SCRIPT_DIR/$ANSIBLE_DIR/ansible.cfg"
+export ANSIBLE_LOCAL_TEMP="$SCRIPT_DIR/.ansible/tmp"
+VAULT_PASS_FILE=""
+ANSIBLE_VAULT_ARGS=()
 
 # 0. Kiểm tra môi trường có đủ công cụ cần thiết không
 function check_requirements() {
     local missing_tools=()
-    for tool in terraform ansible-playbook checkov jq ssh; do
+    for tool in terraform ansible ansible-playbook ansible-inventory checkov jq ssh; do
         if ! command -v "$tool" >/dev/null 2>&1; then
             missing_tools+=("$tool")
         fi
@@ -23,6 +26,36 @@ function check_requirements() {
         echo "Error: Missing required tools: ${missing_tools[*]}"
         echo "Please install them before running this script."
         exit 1
+    fi
+}
+
+# 0.5 Chuẩn bị vault secret cho mọi lệnh ansible (prompt 1 lần)
+function setup_vault_secret() {
+    if [ -n "${ANSIBLE_VAULT_PASSWORD_FILE:-}" ] && [ -f "${ANSIBLE_VAULT_PASSWORD_FILE}" ]; then
+        ANSIBLE_VAULT_ARGS=(--vault-password-file "${ANSIBLE_VAULT_PASSWORD_FILE}")
+        return 0
+    fi
+
+    local vault_password
+    read -rsp "Vault password: " vault_password
+    echo
+
+    if [ -z "$vault_password" ]; then
+        echo "Vault password cannot be empty."
+        exit 1
+    fi
+
+    VAULT_PASS_FILE="$(mktemp)"
+    chmod 600 "$VAULT_PASS_FILE"
+    printf '%s' "$vault_password" > "$VAULT_PASS_FILE"
+    unset vault_password
+
+    ANSIBLE_VAULT_ARGS=(--vault-password-file "$VAULT_PASS_FILE")
+}
+
+function cleanup_vault_secret() {
+    if [ -n "$VAULT_PASS_FILE" ] && [ -f "$VAULT_PASS_FILE" ]; then
+        rm -f "$VAULT_PASS_FILE"
     fi
 }
 
@@ -66,8 +99,8 @@ function wait_for_bastion_ssh() {
     local bastion_ip
     local ansible_user
     
-    bastion_ip=$(ansible-inventory -i "$INVENTORY_FILE" --host bastion | jq -r '.ansible_host')
-    ansible_user=$(ansible-inventory -i "$INVENTORY_FILE" --host bastion | jq -r '.ansible_user // "ubuntu"')
+    bastion_ip=$(ansible-inventory -i "$INVENTORY_FILE" --host bastion "${ANSIBLE_VAULT_ARGS[@]}" | jq -r '.ansible_host')
+    ansible_user=$(ansible-inventory -i "$INVENTORY_FILE" --host bastion "${ANSIBLE_VAULT_ARGS[@]}" | jq -r '.ansible_user // "ubuntu"')
 
     if [ -z "$bastion_ip" ] || [ "$bastion_ip" == "null" ]; then
         echo "Cannot extract bastion IP from inventory."
@@ -88,10 +121,32 @@ function wait_for_bastion_ssh() {
     exit 1
 }
 
+# 3.5 Chờ SSH tới các máy private qua bastion sẵn sàng
+function wait_for_private_ssh() {
+    echo "Waiting for SSH on private hosts through bastion..."
+    for _ in $(seq 1 30); do
+        if ansible -i "$INVENTORY_FILE" private \
+            -m ansible.builtin.wait_for_connection \
+            -a "timeout=20 sleep=2" \
+            --forks 1 \
+            "${ANSIBLE_VAULT_ARGS[@]}" >/dev/null 2>&1; then
+            echo "Private hosts SSH is ready."
+            return 0
+        fi
+        sleep 10
+    done
+
+    echo "Timed out waiting for private hosts SSH through bastion."
+    echo "Debug with: ansible -i $INVENTORY_FILE private -m ping -vvv"
+    exit 1
+}
+
 # MAIN FLOW RUN
 
 # Bước 0: Kiểm tra môi trường
 check_requirements
+setup_vault_secret
+trap cleanup_vault_secret EXIT
 
 # Bước 1: Chạy Security Gate
 checkgate
@@ -115,8 +170,10 @@ fi
 calculate_hash > "$HASH_FILE"
 
 # Bước 3: Chờ mạng Bastion thông suốt
+mkdir -p "$ANSIBLE_LOCAL_TEMP"
 wait_for_bastion_ssh
+wait_for_private_ssh
 
 # Bước 4: Cấu hình phần mềm bên trong bằng Ansible
 echo "Running Ansible Playbook..."
-ansible-playbook -i "$INVENTORY_FILE" "$ANSIBLE_DIR/playbook.yml"
+ansible-playbook -i "$INVENTORY_FILE" "$ANSIBLE_DIR/playbook.yml" "${ANSIBLE_VAULT_ARGS[@]}"

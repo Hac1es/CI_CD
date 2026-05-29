@@ -1,0 +1,35 @@
+gitlabUrl: "{{ gitlab_runner_gitlab_url }}"
+runnerToken: "{{ gitlab_runner_effective_token }}"
+
+concurrent: {{ gitlab_runner_concurrent }}
+checkInterval: {{ gitlab_runner_check_interval }}
+
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  name: "{{ gitlab_runner_release_name }}"
+
+runners:
+  name: "{{ gitlab_runner_name }}"
+  privileged: false
+  config: |
+    [[runners]]
+      name = "{{ gitlab_runner_name }}"
+      executor = "kubernetes"
+      [runners.kubernetes]
+        namespace = "{{ gitlab_runner_namespace }}"
+        image = "{{ gitlab_runner_default_image }}"
+        privileged = false
+        poll_timeout = 180
+        service_account = "{{ gitlab_runner_release_name }}"
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  privileged: false
+  capabilities:
+    drop:
+      - ALL

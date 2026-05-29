@@ -15,5 +15,6 @@ Infrastructure/Terraform/terraform.tfvars
 *.retry
 .ansible/
 Infrastructure/Ansible/inventory.ini
+Infrastructure/Ansible/group_vars/all/vault.yml
 # Uncomment if you want to ignore ansible logs
 # *.log

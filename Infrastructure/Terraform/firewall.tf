@@ -17,11 +17,29 @@ resource "google_compute_firewall" "barrier_2_to_3" {
 
   direction = "INGRESS"
 
-  source_ranges = ["10.0.2.0/24"]
+  source_ranges      = ["10.0.2.0/24"]
   destination_ranges = ["10.0.3.0/24"]
 
   deny {
     protocol = "all"
+  }
+}
+
+# Cho phép K3s/Runner trong Workload gọi GitLab API và Registry nội bộ.
+# Priority cao hơn barrier để chỉ mở đúng các port CI/CD cần thiết.
+resource "google_compute_firewall" "allow_workload_to_gitlab_ci" {
+  name     = "allow-workload-to-gitlab-ci"
+  network  = google_compute_network.vpc.id
+  priority = 900
+
+  direction = "INGRESS"
+
+  source_ranges = ["10.0.2.0/24"]
+  target_tags   = ["gitlab-server"]
+
+  allow {
+    protocol = "tcp"
+    ports    = ["80", "443", "5000"]
   }
 }
 
@@ -32,7 +50,7 @@ resource "google_compute_firewall" "barrier_3_to_2" {
 
   direction = "INGRESS"
 
-  source_ranges = ["10.0.3.0/24"]
+  source_ranges      = ["10.0.3.0/24"]
   destination_ranges = ["10.0.2.0/24"]
 
   deny {

@@ -1,0 +1,26 @@
+---
+# defaults file for gitlab_runner
+gitlab_runner_namespace: gitlab-runner
+gitlab_runner_release_name: gitlab-runner
+gitlab_runner_chart_ref: gitlab/gitlab-runner
+gitlab_runner_chart_repo_name: gitlab
+gitlab_runner_chart_repo_url: https://charts.gitlab.io
+gitlab_runner_chart_version: ""
+gitlab_runner_kubeconfig: /etc/rancher/k3s/k3s.yaml
+
+gitlab_runner_gitlab_url: "http://{{ hostvars['gitlab'].ansible_host }}"
+gitlab_runner_name: k3s-kaniko-runner
+gitlab_runner_type: instance_type
+gitlab_runner_project_id: ""
+gitlab_runner_group_id: ""
+gitlab_runner_tags: "kaniko,k3s"
+gitlab_runner_default_image: alpine:3.20
+gitlab_runner_concurrent: 4
+gitlab_runner_check_interval: 10
+
+# Option 1: provide a runner authentication token directly. It usually starts with glrt-.
+gitlab_runner_token: ""
+
+# Option 2: let Ansible create the runner token through GitLab API.
+# Store this in Ansible Vault or pass it from a secret manager.
+gitlab_api_token: ""

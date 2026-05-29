@@ -1,4 +1,17 @@
 # tasks file for gitlab
+- name: Validate GitLab root password is provided
+  ansible.builtin.assert:
+    that:
+      - gitlab_root_password | length >= 8
+    fail_msg: "Set gitlab_root_password in Ansible Vault and make it at least 8 characters long."
+
+- name: Validate GitLab bootstrap PAT token is provided
+  ansible.builtin.assert:
+    that:
+      - gitlab_bootstrap_pat_token | length >= 20
+    fail_msg: "Set gitlab_api_token or gitlab_bootstrap_pat_token in Ansible Vault. GitLab PAT values must be at least 20 characters."
+  when: gitlab_bootstrap_create_pat | bool
+
 - name: Install GitLab prerequisites
   apt:
     name:
@@ -30,3 +43,37 @@
     lock_timeout: 300
   environment:
     EXTERNAL_URL: "{{ gitlab_external_url }}"
+    GITLAB_REGISTRY_EXTERNAL_URL: "{{ gitlab_registry_external_url }}"
+    GITLAB_ROOT_EMAIL: "{{ gitlab_root_email }}"
+    GITLAB_ROOT_PASSWORD: "{{ gitlab_root_password }}"
+  no_log: "{{ gitlab_hide_sensitive_logs | bool }}"
+
+- name: Wait for GitLab Rails to be available
+  ansible.builtin.command: gitlab-rails runner "puts 'ready'"
+  register: gitlab_rails_ready
+  changed_when: false
+  retries: 30
+  delay: 10
+  until: gitlab_rails_ready.rc == 0
+
+- name: Render GitLab bootstrap script
+  ansible.builtin.template:
+    src: bootstrap_root_and_pat.rb.j2
+    dest: "{{ gitlab_bootstrap_script_path }}"
+    owner: git
+    group: git
+    mode: "0600"
+  no_log: "{{ gitlab_hide_sensitive_logs | bool }}"
+
+- name: Bootstrap GitLab root account and API token
+  ansible.builtin.command: gitlab-rails runner {{ gitlab_bootstrap_script_path | quote }}
+  register: gitlab_bootstrap_result
+  retries: 5
+  delay: 30
+  until: gitlab_bootstrap_result.rc == 0
+  no_log: "{{ gitlab_hide_sensitive_logs | bool }}"
+
+- name: Remove GitLab bootstrap script
+  ansible.builtin.file:
+    path: "{{ gitlab_bootstrap_script_path }}"
+    state: absent

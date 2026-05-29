@@ -1,0 +1,38 @@
+root = User.find_by_username('root')
+raise 'root user not found' unless root
+
+root_email = {{ gitlab_root_email | to_json }}
+root_password = {{ gitlab_root_password | to_json }}
+root_changed = false
+
+if root.email != root_email
+  root.email = root_email
+  root.skip_reconfirmation! if root.respond_to?(:skip_reconfirmation!)
+  root_changed = true
+end
+
+unless root.valid_password?(root_password)
+  root.password = root_password
+  root.password_confirmation = root_password
+  root_changed = true
+end
+
+root.save! if root_changed
+
+{% if gitlab_bootstrap_create_pat | bool %}
+pat_value = {{ gitlab_bootstrap_pat_token | to_json }}
+pat_name = {{ gitlab_bootstrap_pat_name | to_json }}
+pat_scopes = {{ gitlab_bootstrap_pat_scopes | to_json }}
+expires_at = Date.today + {{ gitlab_bootstrap_pat_expires_in_days | int }}
+
+unless PersonalAccessToken.find_by_token(pat_value)
+  root.personal_access_tokens.where(name: pat_name, revoked: false).find_each(&:revoke!)
+  token = root.personal_access_tokens.create!(
+    scopes: pat_scopes,
+    name: pat_name,
+    expires_at: expires_at
+  )
+  token.set_token(pat_value)
+  token.save!
+end
+{% endif %}

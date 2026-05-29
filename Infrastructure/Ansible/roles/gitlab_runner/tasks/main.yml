@@ -1,0 +1,151 @@
+---
+# tasks file for gitlab_runner
+- name: Validate GitLab Runner credentials are provided
+  ansible.builtin.assert:
+    that:
+      - gitlab_runner_token | length > 0 or gitlab_api_token | length > 0
+    fail_msg: "Set either gitlab_runner_token or gitlab_api_token before installing the runner."
+
+- name: Validate project runner settings
+  ansible.builtin.assert:
+    that:
+      - gitlab_runner_project_id | string | length > 0
+    fail_msg: "Set gitlab_runner_project_id when gitlab_runner_type is project_type."
+  when:
+    - gitlab_runner_token | length == 0
+    - gitlab_runner_type == "project_type"
+
+- name: Validate group runner settings
+  ansible.builtin.assert:
+    that:
+      - gitlab_runner_group_id | string | length > 0
+    fail_msg: "Set gitlab_runner_group_id when gitlab_runner_type is group_type."
+  when:
+    - gitlab_runner_token | length == 0
+    - gitlab_runner_type == "group_type"
+
+- name: Install GitLab Runner prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: yes
+    lock_timeout: 300
+
+- name: Check whether Helm is installed
+  ansible.builtin.command: helm version --short
+  register: helm_version
+  changed_when: false
+  failed_when: false
+
+- name: Install Helm
+  ansible.builtin.shell: |
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  args:
+    creates: /usr/local/bin/helm
+  when: helm_version.rc != 0
+
+- name: Wait for K3s kubeconfig
+  ansible.builtin.wait_for:
+    path: "{{ gitlab_runner_kubeconfig }}"
+    state: present
+    timeout: 120
+
+- name: Wait for Kubernetes API to be ready
+  ansible.builtin.command: kubectl --kubeconfig {{ gitlab_runner_kubeconfig | quote }} get nodes
+  register: kubectl_nodes
+  changed_when: false
+  retries: 12
+  delay: 10
+  until: kubectl_nodes.rc == 0
+
+- name: Ensure GitLab Runner namespace exists
+  ansible.builtin.shell: |
+    kubectl --kubeconfig {{ gitlab_runner_kubeconfig | quote }} create namespace {{ gitlab_runner_namespace }} --dry-run=client -o yaml | kubectl --kubeconfig {{ gitlab_runner_kubeconfig | quote }} apply -f -
+  register: gitlab_runner_namespace_apply
+  changed_when: "'created' in gitlab_runner_namespace_apply.stdout or 'configured' in gitlab_runner_namespace_apply.stdout"
+
+- name: Ensure GitLab Helm repository is configured
+  ansible.builtin.shell: |
+    helm repo list | awk '{print $1}' | grep -qx {{ gitlab_runner_chart_repo_name }} || helm repo add {{ gitlab_runner_chart_repo_name }} {{ gitlab_runner_chart_repo_url }}
+  register: gitlab_runner_repo
+  changed_when: "'has been added' in gitlab_runner_repo.stdout"
+
+- name: Update Helm repository cache
+  ansible.builtin.command: helm repo update
+  changed_when: false
+
+- name: Check existing GitLab Runner Helm release
+  ansible.builtin.command: helm status {{ gitlab_runner_release_name }} --namespace {{ gitlab_runner_namespace }} --kubeconfig {{ gitlab_runner_kubeconfig | quote }}
+  register: gitlab_runner_release_status
+  changed_when: false
+  failed_when: false
+
+- name: Build GitLab Runner API request
+  ansible.builtin.set_fact:
+    gitlab_runner_create_body: >-
+      {{
+        {
+          'runner_type': gitlab_runner_type,
+          'description': gitlab_runner_name,
+          'tag_list': gitlab_runner_tags,
+          'run_untagged': 'false',
+          'locked': 'false'
+        }
+        | combine(({'project_id': gitlab_runner_project_id}) if gitlab_runner_type == 'project_type' else {})
+        | combine(({'group_id': gitlab_runner_group_id}) if gitlab_runner_type == 'group_type' else {})
+      }}
+  when:
+    - gitlab_runner_token | length == 0
+    - gitlab_runner_release_status.rc != 0
+
+- name: Create GitLab Runner token through GitLab API
+  ansible.builtin.uri:
+    # checkov:skip=CKV2_ANSIBLE_1: "Tạm thời bỏ qua TLS vì mạng nội bộ đã được cô lập"
+    url: "{{ gitlab_runner_gitlab_url }}/api/v4/user/runners"
+    method: POST
+    headers:
+      PRIVATE-TOKEN: "{{ gitlab_api_token }}"
+    body_format: form-urlencoded
+    body: "{{ gitlab_runner_create_body }}"
+    status_code: 201
+  register: gitlab_runner_create
+  no_log: true
+  when:
+    - gitlab_runner_token | length == 0
+    - gitlab_runner_release_status.rc != 0
+
+- name: Select provided GitLab Runner token
+  ansible.builtin.set_fact:
+    gitlab_runner_effective_token: "{{ gitlab_runner_token }}"
+  no_log: true
+  when: gitlab_runner_token | length > 0
+
+- name: Select created GitLab Runner token
+  ansible.builtin.set_fact:
+    gitlab_runner_effective_token: "{{ gitlab_runner_create.json.token }}"
+  no_log: true
+  when:
+    - gitlab_runner_token | length == 0
+    - gitlab_runner_release_status.rc != 0
+
+- name: Render GitLab Runner Helm values
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: /tmp/gitlab-runner-values.yaml
+    mode: "0600"
+  when: gitlab_runner_token | length > 0 or gitlab_runner_release_status.rc != 0
+
+- name: Install or upgrade GitLab Runner
+  ansible.builtin.command: >
+    helm upgrade --install {{ gitlab_runner_release_name }} {{ gitlab_runner_chart_ref }}
+    --namespace {{ gitlab_runner_namespace }}
+    --kubeconfig {{ gitlab_runner_kubeconfig | quote }}
+    --values /tmp/gitlab-runner-values.yaml
+    {{ '--version ' ~ gitlab_runner_chart_version if gitlab_runner_chart_version | length > 0 else '' }}
+    --wait
+  register: gitlab_runner_helm
+  changed_when: "'has been upgraded' in gitlab_runner_helm.stdout or 'has been installed' in gitlab_runner_helm.stdout"
+  when: gitlab_runner_token | length > 0 or gitlab_runner_release_status.rc != 0

@@ -1,4 +1,16 @@
 # defaults file for gitlab
 gitlab_package_name: gitlab-ce
 gitlab_repo_script_url: https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh
-gitlab_external_url: "http://{{ ansible_host }}"
+# Public browser entrypoint goes through the edge Envoy/WAF.
+gitlab_external_url: "http://{{ hostvars['bastion'].ansible_host }}"
+gitlab_registry_external_url: "http://{{ ansible_host }}:5000"
+
+# Store these in Ansible Vault for full-auto lab bootstrap.
+gitlab_bootstrap_create_pat: true
+gitlab_bootstrap_pat_name: ansible-runner-bootstrap
+gitlab_bootstrap_pat_token: "{{ gitlab_api_token | default('') }}"
+gitlab_bootstrap_pat_scopes:
+  - create_runner
+gitlab_bootstrap_pat_expires_in_days: 365
+gitlab_bootstrap_script_path: /var/opt/gitlab/gitlab-bootstrap-root-and-pat.rb
+gitlab_hide_sensitive_logs: true

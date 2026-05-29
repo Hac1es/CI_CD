@@ -34,8 +34,18 @@
 
 - name: Run Envoy container if missing
   ansible.builtin.shell: |
+    if docker ps -a --format '{% raw %}{{.Names}}{% endraw %}' | grep -qx "{{ envoy_container_name }}"; then
+      network_mode="$(docker inspect --format '{% raw %}{{.HostConfig.NetworkMode}}{% endraw %}' "{{ envoy_container_name }}")"
+      port_binding="$(docker inspect --format '{% raw %}{{json .HostConfig.PortBindings}}{% endraw %}' "{{ envoy_container_name }}")"
+      if [ "$network_mode" = "host" ] || ! echo "$port_binding" | grep -q '"{{ envoy_listen_port }}/tcp"'; then
+        docker rm -f "{{ envoy_container_name }}"
+        echo recreated
+      fi
+    fi
+
     if ! docker ps -a --format '{% raw %}{{.Names}}{% endraw %}' | grep -qx "{{ envoy_container_name }}"; then
-      docker run -d --name {{ envoy_container_name }} --restart unless-stopped --network host \
+      docker run -d --name {{ envoy_container_name }} --restart unless-stopped \
+        -p {{ envoy_host_http_port }}:{{ envoy_listen_port }} \
         -v {{ envoy_config_path }}:{{ envoy_config_path }}:ro \
         -v {{ envoy_wasm_path }}:{{ envoy_wasm_path }}:ro \
         {{ envoy_image }} -c {{ envoy_config_path }}
@@ -47,4 +57,4 @@
       echo unchanged
     fi
   register: envoy_container_run
-  changed_when: "envoy_container_run.stdout is search('created|started')"
+  changed_when: "envoy_container_run.stdout is search('created|started|recreated')"
