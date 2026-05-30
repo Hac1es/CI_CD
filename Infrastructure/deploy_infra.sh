@@ -141,6 +141,25 @@ function wait_for_private_ssh() {
     exit 1
 }
 
+# 4.5 Lấy IP edge và in hướng dẫn truy cập qua Envoy
+function print_connection_info() {
+    local edge_ip
+
+    edge_ip=$(ansible-inventory -i "$INVENTORY_FILE" --host bastion "${ANSIBLE_VAULT_ARGS[@]}" | jq -r '.ansible_host')
+
+    if [ -z "$edge_ip" ] || [ "$edge_ip" == "null" ]; then
+        echo "Deployment completed successfully!"
+        echo "Cannot extract public edge IP from inventory."
+        return 0
+    fi
+
+    echo "Deployment completed successfully!"
+    echo "Public Edge IP: $edge_ip"
+    echo
+    echo "You can connect to GitLab Web UI using: http://$edge_ip/gitlab"
+    echo "You can connect to SonarQube Web UI using: http://$edge_ip/sonarqube"
+}
+
 # MAIN FLOW RUN
 
 # Bước 0: Kiểm tra môi trường
@@ -177,3 +196,6 @@ wait_for_private_ssh
 # Bước 4: Cấu hình phần mềm bên trong bằng Ansible
 echo "Running Ansible Playbook..."
 ansible-playbook -i "$INVENTORY_FILE" "$ANSIBLE_DIR/playbook.yml" "${ANSIBLE_VAULT_ARGS[@]}"
+
+# Bước 5: Xuất ra thông tin kết nối sau khi deploy xong
+print_connection_info

@@ -48,6 +48,32 @@
     GITLAB_ROOT_PASSWORD: "{{ gitlab_root_password }}"
   no_log: "{{ gitlab_hide_sensitive_logs | bool }}"
 
+- name: Configure GitLab external URL
+  ansible.builtin.lineinfile:
+    path: /etc/gitlab/gitlab.rb
+    regexp: "^external_url "
+    line: "external_url '{{ gitlab_external_url }}'"
+    create: yes
+    owner: root
+    group: root
+    mode: "0600"
+  register: gitlab_external_url_config
+
+- name: Configure GitLab registry external URL
+  ansible.builtin.lineinfile:
+    path: /etc/gitlab/gitlab.rb
+    regexp: "^registry_external_url "
+    line: "registry_external_url '{{ gitlab_registry_external_url }}'"
+    create: yes
+    owner: root
+    group: root
+    mode: "0600"
+  register: gitlab_registry_url_config
+
+- name: Reconfigure GitLab after URL changes
+  ansible.builtin.command: gitlab-ctl reconfigure
+  when: gitlab_external_url_config.changed or gitlab_registry_url_config.changed
+
 - name: Wait for GitLab Rails to be available
   ansible.builtin.command: gitlab-rails runner "puts 'ready'"
   register: gitlab_rails_ready
@@ -64,16 +90,4 @@
     group: git
     mode: "0600"
   no_log: "{{ gitlab_hide_sensitive_logs | bool }}"
-
-- name: Bootstrap GitLab root account and API token
-  ansible.builtin.command: gitlab-rails runner {{ gitlab_bootstrap_script_path | quote }}
-  register: gitlab_bootstrap_result
-  retries: 5
-  delay: 30
-  until: gitlab_bootstrap_result.rc == 0
-  no_log: "{{ gitlab_hide_sensitive_logs | bool }}"
-
-- name: Remove GitLab bootstrap script
-  ansible.builtin.file:
-    path: "{{ gitlab_bootstrap_script_path }}"
-    state: absent
+  notify: Bootstrap GitLab root account and API token

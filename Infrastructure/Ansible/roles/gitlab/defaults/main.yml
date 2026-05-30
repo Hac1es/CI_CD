@@ -2,7 +2,7 @@
 gitlab_package_name: gitlab-ce
 gitlab_repo_script_url: https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh
 # Public browser entrypoint goes through the edge Envoy/WAF.
-gitlab_external_url: "http://{{ hostvars['bastion'].ansible_host }}"
+gitlab_external_url: "http://{{ hostvars['bastion'].ansible_host }}/gitlab"
 gitlab_registry_external_url: "http://{{ ansible_host }}:5000"
 
 # Store these in Ansible Vault for full-auto lab bootstrap.

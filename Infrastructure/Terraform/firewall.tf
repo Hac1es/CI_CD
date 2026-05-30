@@ -43,6 +43,24 @@ resource "google_compute_firewall" "allow_workload_to_gitlab_ci" {
   }
 }
 
+# Cho phép K3s/Runner trong Workload gọi SonarQube để chạy SAST/Quality Gate.
+# Priority cao hơn barrier để chỉ mở đúng port SonarQube cần thiết.
+resource "google_compute_firewall" "allow_workload_to_sast" {
+  name     = "allow-workload-to-sast"
+  network  = google_compute_network.vpc.id
+  priority = 900
+
+  direction = "INGRESS"
+
+  source_ranges = ["10.0.2.0/24"]
+  target_tags   = ["sast-server"]
+
+  allow {
+    protocol = "tcp"
+    ports    = ["9000"]
+  }
+}
+
 # Chặn traffic từ Management sang Workload
 resource "google_compute_firewall" "barrier_3_to_2" {
   name    = "barrier-3-to-2"

@@ -74,6 +74,40 @@ resource "google_compute_instance" "gitlab" {
   }
 }
 
+resource "google_compute_instance" "sast_server" {
+  # checkov:skip=CKV_GCP_38: Sử dụng mã hóa mặc định của Google là đủ rồi
+  name                      = "sonarqube-server"
+  machine_type              = "e2-standard-2"
+  zone                      = var.zone
+  tags                      = ["private-egress", "sast-server"]
+  allow_stopping_for_update = true
+  desired_status            = var.vm_state
+
+  shielded_instance_config {
+    enable_secure_boot          = true
+    enable_vtpm                 = true
+    enable_integrity_monitoring = true
+  }
+
+  metadata = {
+    enable-oslogin         = "TRUE"
+    block-project-ssh-keys = "TRUE"
+  }
+
+  boot_disk {
+    initialize_params {
+      image = data.google_compute_image.ubuntu.self_link
+      size  = 50
+      type  = "pd-balanced"
+    }
+  }
+
+  network_interface {
+    subnetwork = google_compute_subnetwork.management.id
+    # Không có access_config => KHÔNG có IP Public
+  }
+}
+
 # --- 3. VMs Ở WORKLOAD SUBNET (K3s Master & Worker) ---
 resource "google_compute_instance" "k3s_master" {
   # checkov:skip=CKV_GCP_38: Sử dụng mã hóa mặc định của Google là đủ rồi

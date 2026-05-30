@@ -1,0 +1,222 @@
+---
+- name: Install SonarQube runtime dependencies
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - docker.io
+      - openssl
+    state: present
+    update_cache: yes
+    lock_timeout: 300
+
+- name: Ensure Docker service is enabled and running
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Configure vm.max_map_count for SonarQube Elasticsearch
+  ansible.builtin.sysctl:
+    name: vm.max_map_count
+    value: "{{ sonarqube_vm_max_map_count }}"
+    state: present
+    reload: true
+
+- name: Configure fs.file-max for SonarQube
+  ansible.builtin.sysctl:
+    name: fs.file-max
+    value: "{{ sonarqube_fs_file_max }}"
+    state: present
+    reload: true
+
+- name: Create SonarQube state directory
+  ansible.builtin.file:
+    path: "{{ sonarqube_base_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Check existing SonarQube database password
+  ansible.builtin.stat:
+    path: "{{ sonarqube_password_file }}"
+  register: sonarqube_password_stat
+
+- name: Generate SonarQube database password
+  ansible.builtin.command: openssl rand -base64 32
+  register: sonarqube_generated_db_password
+  changed_when: true
+  no_log: true
+  when: not sonarqube_password_stat.stat.exists
+
+- name: Store SonarQube database password
+  ansible.builtin.copy:
+    dest: "{{ sonarqube_password_file }}"
+    content: "{{ sonarqube_generated_db_password.stdout }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: not sonarqube_password_stat.stat.exists
+
+- name: Read SonarQube database password
+  ansible.builtin.slurp:
+    src: "{{ sonarqube_password_file }}"
+  register: sonarqube_db_password_raw
+  no_log: true
+
+- name: Set SonarQube database password fact
+  ansible.builtin.set_fact:
+    sonarqube_db_password: "{{ sonarqube_db_password_raw.content | b64decode | trim }}"
+  no_log: true
+
+- name: Ensure SonarQube Docker network exists
+  ansible.builtin.command: docker network create {{ sonarqube_network_name }}
+  register: sonarqube_network_create
+  changed_when: sonarqube_network_create.rc == 0
+  failed_when: sonarqube_network_create.rc != 0 and 'already exists' not in sonarqube_network_create.stderr
+
+- name: Ensure SonarQube Docker volumes exist
+  ansible.builtin.command: docker volume create {{ item }}
+  register: sonarqube_volume_create
+  changed_when: item in sonarqube_volume_create.stdout
+  loop:
+    - "{{ sonarqube_db_volume }}"
+    - "{{ sonarqube_data_volume }}"
+    - "{{ sonarqube_extensions_volume }}"
+    - "{{ sonarqube_logs_volume }}"
+
+- name: Inspect SonarQube PostgreSQL container
+  ansible.builtin.command: docker inspect {{ sonarqube_db_container_name }}
+  register: sonarqube_db_container_inspect
+  changed_when: false
+  failed_when: false
+
+- name: Create SonarQube PostgreSQL container
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - -d
+      - --name
+      - "{{ sonarqube_db_container_name }}"
+      - --restart
+      - unless-stopped
+      - --network
+      - "{{ sonarqube_network_name }}"
+      - -e
+      - "POSTGRES_USER={{ sonarqube_db_user }}"
+      - -e
+      - "POSTGRES_PASSWORD={{ sonarqube_db_password }}"
+      - -e
+      - "POSTGRES_DB={{ sonarqube_db_name }}"
+      - -v
+      - "{{ sonarqube_db_volume }}:/var/lib/postgresql/data"
+      - "{{ sonarqube_db_image }}"
+  no_log: true
+  when: sonarqube_db_container_inspect.rc != 0
+
+- name: Check whether SonarQube PostgreSQL is running
+  ansible.builtin.command: docker inspect --format={% raw %}{{.State.Running}}{% endraw %} {{ sonarqube_db_container_name }}
+  register: sonarqube_db_running
+  changed_when: false
+
+- name: Start SonarQube PostgreSQL container
+  ansible.builtin.command: docker start {{ sonarqube_db_container_name }}
+  when: sonarqube_db_running.stdout != "true"
+
+- name: Wait for SonarQube PostgreSQL to accept connections
+  ansible.builtin.command: docker exec {{ sonarqube_db_container_name }} pg_isready -U {{ sonarqube_db_user }} -d {{ sonarqube_db_name }}
+  register: sonarqube_db_ready
+  changed_when: false
+  retries: 30
+  delay: 5
+  until: sonarqube_db_ready.rc == 0
+
+- name: Inspect SonarQube container
+  ansible.builtin.command: docker inspect {{ sonarqube_container_name }}
+  register: sonarqube_container_inspect
+  changed_when: false
+  failed_when: false
+
+- name: Inspect SonarQube container environment
+  ansible.builtin.command:
+    argv:
+      - docker
+      - inspect
+      - --format={% raw %}{{json .Config.Env}}{% endraw %}
+      - "{{ sonarqube_container_name }}"
+  register: sonarqube_container_env
+  changed_when: false
+  no_log: true
+  when: sonarqube_container_inspect.rc == 0
+
+- name: Recreate SonarQube container when web context changes
+  ansible.builtin.command: docker rm -f {{ sonarqube_container_name }}
+  register: sonarqube_container_recreated
+  when:
+    - sonarqube_container_inspect.rc == 0
+    - "'SONAR_WEB_CONTEXT=' ~ sonarqube_web_context not in sonarqube_container_env.stdout"
+
+- name: Create SonarQube container
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - -d
+      - --name
+      - "{{ sonarqube_container_name }}"
+      - --restart
+      - unless-stopped
+      - --network
+      - "{{ sonarqube_network_name }}"
+      - -p
+      - "{{ sonarqube_listen_address }}:{{ sonarqube_http_port }}:9000"
+      - --ulimit
+      - "nofile={{ sonarqube_nofile_limit }}:{{ sonarqube_nofile_limit }}"
+      - --ulimit
+      - "nproc={{ sonarqube_nproc_limit }}:{{ sonarqube_nproc_limit }}"
+      - -e
+      - "SONAR_JDBC_URL=jdbc:postgresql://{{ sonarqube_db_host }}:{{ sonarqube_db_port }}/{{ sonarqube_db_name }}"
+      - -e
+      - "SONAR_JDBC_USERNAME={{ sonarqube_db_user }}"
+      - -e
+      - "SONAR_JDBC_PASSWORD={{ sonarqube_db_password }}"
+      - -e
+      - "SONAR_WEB_CONTEXT={{ sonarqube_web_context }}"
+      - -v
+      - "{{ sonarqube_data_volume }}:/opt/sonarqube/data"
+      - -v
+      - "{{ sonarqube_extensions_volume }}:/opt/sonarqube/extensions"
+      - -v
+      - "{{ sonarqube_logs_volume }}:/opt/sonarqube/logs"
+      - "{{ sonarqube_image }}"
+  no_log: true
+  when: sonarqube_container_inspect.rc != 0 or (sonarqube_container_recreated.changed | default(false))
+
+- name: Check whether SonarQube is running
+  ansible.builtin.command: docker inspect --format={% raw %}{{.State.Running}}{% endraw %} {{ sonarqube_container_name }}
+  register: sonarqube_running
+  changed_when: false
+
+- name: Start SonarQube container
+  ansible.builtin.command: docker start {{ sonarqube_container_name }}
+  when: sonarqube_running.stdout != "true"
+
+- name: Wait for SonarQube HTTP API
+  ansible.builtin.uri:
+    # checkov:skip=CKV2_ANSIBLE_1: Local readiness check against SonarQube before edge/TLS exposure
+    url: "http://127.0.0.1:{{ sonarqube_http_port }}{{ sonarqube_web_context }}/api/system/status"
+    method: GET
+    status_code:
+      - 200
+      - 503
+  register: sonarqube_api_status
+  changed_when: false
+  retries: 60
+  delay: 10
+  until:
+    - sonarqube_api_status.json is defined
+    - sonarqube_api_status.json.status is defined
+    - sonarqube_api_status.json.status in ["UP", "DB_MIGRATION_NEEDED"]

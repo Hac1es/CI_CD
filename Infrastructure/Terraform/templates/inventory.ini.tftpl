@@ -3,6 +3,7 @@ bastion ansible_host=${bastion_public_ip}
 
 [management]
 gitlab ansible_host=${gitlab_private_ip}
+sast ansible_host=${sastserver_private_ip}
 
 [workload]
 master ansible_host=${k3s_master_private_ip}

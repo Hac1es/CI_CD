@@ -1,0 +1,27 @@
+---
+sonarqube_base_dir: /opt/sonarqube
+sonarqube_password_file: "{{ sonarqube_base_dir }}/.postgres_password"
+
+sonarqube_container_name: sonarqube
+sonarqube_image: sonarqube:lts-community
+sonarqube_listen_address: "0.0.0.0"
+sonarqube_http_port: 9000
+sonarqube_web_context: /sonarqube
+
+sonarqube_network_name: sonarqube-net
+sonarqube_data_volume: sonarqube_data
+sonarqube_extensions_volume: sonarqube_extensions
+sonarqube_logs_volume: sonarqube_logs
+
+sonarqube_db_container_name: sonarqube-postgres
+sonarqube_db_image: postgres:16-alpine
+sonarqube_db_volume: sonarqube_postgres
+sonarqube_db_name: sonarqube
+sonarqube_db_user: sonarqube
+sonarqube_db_host: "{{ sonarqube_db_container_name }}"
+sonarqube_db_port: 5432
+
+sonarqube_vm_max_map_count: 524288
+sonarqube_fs_file_max: 131072
+sonarqube_nofile_limit: 131072
+sonarqube_nproc_limit: 8192

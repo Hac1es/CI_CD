@@ -7,6 +7,8 @@ envoy_listen_port: 8080
 envoy_admin_port: 9901
 envoy_upstream_host: "{{ hostvars['gitlab'].ansible_host }}"
 envoy_upstream_port: 80
+envoy_sonarqube_upstream_host: "{{ hostvars['sast'].ansible_host | default('') }}"
+envoy_sonarqube_upstream_port: 9000
 envoy_config_path: /etc/envoy/envoy.yaml
 envoy_wasm_path: "{{ coraza_wasm_path }}"
 envoy_wasm_vm_id: coraza-filter-vm

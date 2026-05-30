@@ -1,0 +1,8 @@
+---
+- name: Bootstrap GitLab root account and API token
+  ansible.builtin.command: gitlab-rails runner {{ gitlab_bootstrap_script_path | quote }}
+  register: gitlab_bootstrap_result
+  retries: 5
+  delay: 30
+  until: gitlab_bootstrap_result.rc == 0
+  no_log: "{{ gitlab_hide_sensitive_logs | bool }}"
